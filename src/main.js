@@ -28,12 +28,12 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.9);
 sun.position.set(6, 10, 8);
 scene.add(sun);
 
-// ---------- VR rig (everything goes in here) ----------
+// ---------- VR rig ----------
 const rig = new THREE.Group();
 rig.position.set(0, 0, -2.2); // put content ~2.2m in front of where you start in VR
 scene.add(rig);
 
-// ---------- helpers (optional but nice) ----------
+// ---------- optional helpers ----------
 {
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(8, 8),
@@ -44,7 +44,7 @@ scene.add(rig);
   rig.add(floor);
 }
 
-// ---------- board params (VR-friendly meters) ----------
+// ---------- board params ----------
 const BOARD_W = 2.2;
 const BOARD_H = 2.6;
 
@@ -106,7 +106,7 @@ const pegs = [];
 
 // balls (simple fake physics for now)
 const balls = [];
-const BALL_R = 0.05;
+const BALL_R = 0.1;
 const GRAVITY = 0.006;
 const FLOOR_Y = 0.15;
 
@@ -116,7 +116,7 @@ function spawnBall() {
     new THREE.MeshStandardMaterial({ color: 0x6ec1ff, roughness: 0.35 })
   );
 
-  ball.position.set((Math.random() - 0.5) * 0.08, BOARD_H + 0.35 - 0.05, 0.12);
+  ball.position.set((Math.random() - 0.5) * 0.08, BOARD_H + 0.30, 0.12);
   ball.userData.v = new THREE.Vector3((Math.random() - 0.5) * 0.002, 0, 0);
 
   rig.add(ball);
@@ -169,7 +169,16 @@ function updateBalls() {
 }
 
 // start with a few
-for (let i = 0; i < 8; i++) spawnBall();
+// for (let i = 0; i < 30; i++) spawnBall();
+async function spawnBatch(n, delayMs = 200) {
+  for (let i = 0; i < n; i++) {
+    spawnBall();
+    await new Promise(r => setTimeout(r, delayMs));
+  }
+}
+
+spawnBatch(30, 200);
+
 
 // resize + render loop 
 addEventListener("resize", () => {
