@@ -41,7 +41,6 @@ const rig = new THREE.Group();
 rig.position.set(0, 0, -2.2);
 scene.add(rig);
 
-// We'll treat Rapier world as "global", so convert rig-local <-> world positions.
 const RIG_OFFSET = rig.position.clone();
 
 function toWorldPos(x, y, z) {
@@ -61,11 +60,15 @@ const PEG_R = 0.03;
 
 const BIN_COUNT = PEG_COLS + 1;
 
-const BALL_R = 0.06; // start smaller than 0.1 for stability
-const BALL_Z = 0.12; // where balls/pegs live (depth lane)
-const PEG_Z = 0.08;
+const BALL_R = 0.06;
+const BALL_Z = 0.12;
+const PEG_Z = 0.12;
 
 const FLOOR_Y = 0.15;
+
+const BIN_Z = BALL_Z;
+const BIN_DEPTH = 0.40;
+const BIN_WALL_H = 0.35;
 
 // ---------- Rapier helper builders ----------
 function addFixedCuboid(localX, localY, localZ, hx, hy, hz, opts = {}) {
@@ -131,8 +134,15 @@ function addDynamicBall(mesh, localX, localY, localZ, r, opts = {}) {
   floor.position.y = 0;
   rig.add(floor);
 
-  // Physics floor (big thin box)
-  addFixedCuboid(0, 0.0, 0.0, 10, 0.02, 10, { friction: 0.9, restitution: 0.05 });
+  addFixedCuboid(
+    0,
+    0.0,
+    BALL_Z,
+    6,
+    0.03,
+    BIN_DEPTH / 2 + 0.35,
+    { friction: 0.9, restitution: 0.05 }
+  );
 }
 
 // ---------- Backboard (visual + physics thin slab) ----------
@@ -143,15 +153,6 @@ function addDynamicBall(mesh, localX, localY, localZ, r, opts = {}) {
   );
   back.position.set(0, BOARD_H / 2 + 0.35, -0.02);
   rig.add(back);
-
-  addFixedCuboid(
-    0,
-    BOARD_H / 2 + 0.35,
-    -0.04,
-    BOARD_W / 2,
-    BOARD_H / 2,
-    0.01
-  );
 }
 
 // ---------- Pegs (visual + physics spheres) ----------
@@ -187,7 +188,6 @@ const pegs = [];
 {
   const binW = BOARD_W / BIN_COUNT;
 
-  // Make them shallow in Z so balls don't get "inside" the wall volume
   const wallVisual = new THREE.BoxGeometry(0.01, 0.35, 0.18);
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8d99ae, roughness: 0.7 });
 
@@ -198,18 +198,11 @@ const pegs = [];
     wall.position.set(x, 0.3, BALL_Z);
     rig.add(wall);
 
-    // physics: cuboid half-extents
     addFixedCuboid(x, 0.3, BALL_Z, 0.005, 0.175, 0.09, {
       friction: 0.6,
       restitution: 0.05,
     });
   }
-
-  // Physics "lip" floor where bins start (optional but helps settle)
-  addFixedCuboid(0, FLOOR_Y - 0.02, BALL_Z, BOARD_W / 2, 0.02, 0.14, {
-    friction: 0.95,
-    restitution: 0.02,
-  });
 }
 
 // ---------- Side walls to keep balls on the board ----------
@@ -221,6 +214,26 @@ const pegs = [];
   // Left & right vertical containment
   addFixedCuboid(-limit, wallY, BALL_Z, 0.02, wallH / 2, 0.14);
   addFixedCuboid(+limit, wallY, BALL_Z, 0.02, wallH / 2, 0.14);
+}
+
+{
+  // back wall (closer to backboard)
+  addFixedCuboid(0, FLOOR_Y + BIN_WALL_H / 2, BIN_Z - BIN_DEPTH / 2,
+    BOARD_W / 2, BIN_WALL_H / 2, 0.01,
+    { friction: 0.7, restitution: 0.05 }
+  );
+
+  // front wall (prevents rolling toward camera)
+  addFixedCuboid(0, FLOOR_Y + BIN_WALL_H / 2, BIN_Z + BIN_DEPTH / 2,
+    BOARD_W / 2, BIN_WALL_H / 2, 0.01,
+    { friction: 0.7, restitution: 0.05 }
+  );
+
+  addFixedCuboid(0, FLOOR_Y - 0.02, BIN_Z,
+    BOARD_W / 2, 0.02, BIN_DEPTH / 2,
+    { friction: 0.95, restitution: 0.02 }
+  );
+
 }
 
 // ---------- Balls (Rapier dynamics) ----------
@@ -238,11 +251,7 @@ function spawnBall() {
   rig.add(ball);
 
   const body = addDynamicBall(ball, x, y, z, BALL_R);
-
-  // tiny impulse so identical drops don't stack perfectly
-  // body.applyImpulse({ x: (Math.random() - 0.5) * 0.15, y: 0, z: 0 }, true);
-
-  // cap total
+  
   if (dynamic.length > 250) {
     const old = dynamic.shift();
     rig.remove(old.mesh);
@@ -306,4 +315,4 @@ renderer.setAnimationLoop((t) => {
 
   controls.update();
   renderer.render(scene, camera);
-});
+});  
