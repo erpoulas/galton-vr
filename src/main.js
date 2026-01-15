@@ -126,7 +126,7 @@ function addDynamicBall(mesh, localX, localY, localZ, r, opts = {}) {
       .setLinearDamping(opts.linearDamping ?? 0.05)
       .setAngularDamping(opts.angularDamping ?? 0.8)
       .setCcdEnabled(true)
-      .setCanSleep(false)
+      .setCanSleep(true)
   );
 
   const col = RAPIER.ColliderDesc.ball(r)
@@ -231,27 +231,6 @@ function updateRapierDebug() {
   );
 }
 
-// ---------- Backboard (visual + physics thin slab) ----------
-{
-  const back = new THREE.Mesh(
-    new THREE.BoxGeometry(BOARD_W, BOARD_H, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0x1c2541, roughness: 0.8 })
-  );
-  back.position.set(0, BOARD_H / 2 + 0.35, -0.02);
-  rig.add(back);
-
-  addFixedCuboid(
-  0,
-  BOARD_H / 2 + 0.35,
-  -0.02,
-  BOARD_W / 2,
-  BOARD_H / 2,
-  0.02,
-  { friction: 0.6, restitution: 0.05 }
-);
-
-}
-
 const ROWS = PEG_ROWS;
 const COL_SPACING = 0.25;
 const extremePegX = (ROWS - 1) * COL_SPACING * 0.5;
@@ -292,7 +271,7 @@ function pegEdgeHalfWAtY(y) {
   return t * extremePegX;
 }
 
-const PEG_WALL_GAP = 0.190;
+const PEG_WALL_GAP = 0.192;
 const triHalfWAtY = (y) => pegEdgeHalfWAtY(y) + PEG_WALL_GAP;
 const throatHalfW = triHalfWAtY(THROAT_Y1);
 const funnelHalfWTop = BOARD_W / 2 + 0.02;
@@ -300,6 +279,36 @@ const funnelHalfWBot = throatHalfW;
 
 const triHalfWTop = triHalfWAtY(THROAT_Y1);
 const triHalfWBottom = triHalfWAtY(PEG_BOTTOM_Y);
+
+
+// ---------- Backboard (visual + physics thin slab) ----------
+{
+  const BACK_W = 2 * triHalfWBottom + 0.20;
+
+  const BACK_TOP_Y = TOP_Y0 + 0.20;
+  const BACK_BOTTOM_Y = 0.0;
+
+  const BACK_H = BACK_TOP_Y - BACK_BOTTOM_Y;
+  const BACK_CY = (BACK_TOP_Y + BACK_BOTTOM_Y) / 2;
+
+  const back = new THREE.Mesh(
+    new THREE.BoxGeometry(BACK_W, BACK_H, 0.04),
+    new THREE.MeshStandardMaterial({ color: 0x1c2541, roughness: 0.8 })
+  );
+  back.position.set(0, BACK_CY, -0.02);
+  rig.add(back);
+
+  addFixedCuboid(
+    0,
+    BACK_CY,
+    -0.02,
+    BACK_W / 2,
+    BACK_H / 2,
+    0.02,
+    { friction: 0.6, restitution: 0.05 }
+  );
+}
+
 
 // ---------- Connected side walls (funnel , throat , triangle , box) ----------
 {
@@ -319,18 +328,18 @@ const triHalfWBottom = triHalfWAtY(PEG_BOTTOM_Y);
 {
   // back wall (closer to backboard)
   addFixedCuboid(0, FLOOR_Y + BIN_WALL_H / 2, BIN_Z - BIN_DEPTH / 2,
-    BOARD_W / 2, BIN_WALL_H / 2, 0.01,
+    triHalfWBottom, BIN_WALL_H / 2, 0.01,
     { friction: 0.7, restitution: 0.05 }
   );
 
   // front wall (prevents rolling toward camera)
   addFixedCuboid(0, FLOOR_Y + BIN_WALL_H / 2, BIN_Z + BIN_DEPTH / 2,
-    BOARD_W / 2, BIN_WALL_H / 2, 0.01,
+    triHalfWBottom, BIN_WALL_H / 2, 0.01,
     { friction: 0.7, restitution: 0.05 }
   );
 
   addFixedCuboid(0, FLOOR_Y - 0.02, BIN_Z,
-    BOARD_W / 2, 0.02, BIN_DEPTH / 2,
+    triHalfWBottom, 0.02, BIN_DEPTH / 2,
     { friction: 0.95, restitution: 0.02 }
   );
 
@@ -338,9 +347,7 @@ const triHalfWBottom = triHalfWAtY(PEG_BOTTOM_Y);
 
 // ---------- Bins / divider walls (visual + physics) ----------
 {
-  const binW = (2 * boxHalfW) / BIN_COUNT;
-
-  const boxTopY = PEG_BOTTOM_Y - 0.25;
+  const boxTopY = PEG_BOTTOM_Y - 0.1;
   const boxBottomY = FLOOR_Y;
   const dividerY = (boxTopY + boxBottomY) / 2;
   const boxHalfH = (boxTopY - boxBottomY) / 2;
@@ -348,8 +355,9 @@ const triHalfWBottom = triHalfWAtY(PEG_BOTTOM_Y);
   const wallVisual = new THREE.BoxGeometry(0.01, boxHalfH * 2, 0.18);
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x8d99ae, roughness: 0.7 });
 
-  for (let i = 0; i <= BIN_COUNT; i++) {
-    const x = -boxHalfW + i * binW;
+  // 10 inner walls placed exactly under the 10 bottom pegs
+  for (let i = 0; i < PEG_COLS; i++) {        // PEG_COLS = 10
+    const x = -extremePegX + i * COL_SPACING; // -1.125 .. +1.125 (step 0.25)
 
     const wall = new THREE.Mesh(wallVisual, wallMat);
     wall.position.set(x, dividerY, BALL_Z);
@@ -357,10 +365,11 @@ const triHalfWBottom = triHalfWAtY(PEG_BOTTOM_Y);
 
     addFixedCuboid(x, dividerY, BALL_Z, 0.005, boxHalfH, 0.09, {
       friction: 0.6,
-      restitution: 0.05,
+      restitution: 0.02, // lower bounce helps
     });
   }
 }
+
 
 // ---------- Outer frame containment (vertical, full height) ----------
 {
@@ -389,10 +398,11 @@ function spawnBall() {
   rig.add(ball);
 
   addDynamicBall(ball, x, y, z, BALL_R, {
-    restitution: 0.03,
-    friction: 0.35,
-    angularDamping: 1.6,
-    linearDamping: 0.05,
+    restitution: 0.12,
+    friction: 0.12,
+    angularDamping: 0.08,
+    linearDamping: 0.015,
+    density: 2.2
   });
 }
 
@@ -408,7 +418,7 @@ async function spawnBatch(n, delayMs = 200) {
     await new Promise((r) => setTimeout(r, delayMs));
   }
 }
-spawnBatch(30, 350);
+spawnBatch(30, 500);
 
 // ---------- resize ----------
 function onResize() {
